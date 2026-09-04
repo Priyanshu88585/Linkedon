@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: linkedon-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - linkedon_mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: linkedon
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/linkedon --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: linkedon-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - linkedon_redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  linkedon_mongo_data:
+  linkedon_redis_data:
