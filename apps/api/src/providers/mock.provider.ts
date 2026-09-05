@@ -32,12 +32,14 @@ const MOCK_PROFILES: Record<string, Partial<ProviderResult["data"]>> = {
   },
 };
 
-export class MockProvider {
+import { BaseProvider, EnrichmentParams } from "./base.provider";
+
+export class MockProvider extends BaseProvider {
   getName(): string {
     return "mock-provider";
   }
 
-  supports(_input: string): boolean {
+  supports(_params: EnrichmentParams): boolean {
     return true; // Supports everything in dev mode
   }
 
@@ -45,7 +47,7 @@ export class MockProvider {
     return { isHealthy: true, latencyMs: 0 };
   }
 
-  async enrich(input: string): Promise<ProviderResult> {
+  async enrich(params: EnrichmentParams): Promise<ProviderResult> {
     const start = Date.now();
 
     // Simulate network latency

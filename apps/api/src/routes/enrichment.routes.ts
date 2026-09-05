@@ -6,6 +6,7 @@ import { authenticate, AuthenticatedRequest } from "../middleware/auth.middlewar
 import { enrichmentRateLimiter } from "../middleware/rate-limit.middleware";
 import { HttpErrors } from "../middleware/error.middleware";
 import { enrichmentQueue } from "../queues/enrichment.queue";
+import { providerManager } from "../services/provider-manager.service";
 
 export const enrichmentRouter = Router();
 enrichmentRouter.use(authenticate);
@@ -15,6 +16,63 @@ const enrichmentSchema = z.object({
   inputType: z.nativeEnum(EnrichmentInputType),
   saveContact: z.boolean().default(true),
   idempotencyKey: z.string().max(128).optional(),
+});
+
+// POST /enrichment/person
+enrichmentRouter.post("/person", async (req: AuthenticatedRequest, res) => {
+  const { email, firstName, lastName, companyName, companyDomain, linkedinUrl } = req.body;
+
+  if (!email && !(firstName && lastName && companyName) && !linkedinUrl) {
+    throw HttpErrors.badRequest("Insufficient parameters for enrichment. Need email, linkedinUrl, or Name + Company.");
+  }
+
+  // Orchestrated enrichment waterfall
+  const result = await providerManager.enrichPerson({
+    email,
+    firstName,
+    lastName,
+    companyName,
+    companyDomain,
+    linkedinUrl,
+  });
+
+  // Log the attempt for billing & analytics
+  await EnrichmentModel.create({
+    workspaceId: req.workspaceId,
+    userId: req.user!._id,
+    targetType: "person",
+    targetIdentifier: email || linkedinUrl || `${firstName} ${lastName}`,
+    provider: result.provider,
+    status: result.success ? EnrichmentStatus.COMPLETED : EnrichmentStatus.FAILED,
+    creditsCost: result.success ? 1 : 0, // Deduct 1 credit if successful
+    metadata: { latencyMs: result.latencyMs },
+  });
+
+  if (!result.success || !result.data) {
+    return res.status(404).json(result);
+  }
+
+  // Save enriched contact to DB automatically
+  const contact = await ContactModel.create({
+    workspaceId: req.workspaceId,
+    ...result.data,
+    enrichedAt: new Date(),
+    enrichedBy: req.user!._id,
+    enrichmentProvider: result.provider,
+  });
+
+  res.json({
+    success: true,
+    data: {
+      contact,
+      providerMetadata: {
+        provider: result.provider,
+        confidence: result.confidence,
+        latencyMs: result.latencyMs,
+        isMocked: result.isMocked,
+      }
+    }
+  });
 });
 
 // POST /enrichment

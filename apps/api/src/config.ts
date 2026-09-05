@@ -54,6 +54,13 @@ export const config = {
   // Feature flags
   enableRealProviders: optional("ENABLE_REAL_PROVIDERS", "false") === "true",
 
+  // Providers
+  providers: {
+    hunter: process.env.HUNTER_API_KEY ?? "",
+    apollo: process.env.APOLLO_API_KEY ?? "",
+    clearbit: process.env.CLEARBIT_API_KEY ?? "",
+  },
+
   // S3
   s3: {
     bucket: optional("S3_BUCKET", "linkedon-uploads"),
