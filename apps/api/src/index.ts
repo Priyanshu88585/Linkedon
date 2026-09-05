@@ -25,6 +25,8 @@ import { extensionRouter } from "./routes/extension.routes";
 import { webhookRouter } from "./routes/webhook.routes";
 import { adminRouter } from "./routes/admin.routes";
 import { healthRouter } from "./routes/health.routes";
+import { bulkRouter } from "./routes/bulk.routes";
+import { analyticsRouter } from "./routes/analytics.routes";
 
 const app = express();
 
@@ -64,10 +66,12 @@ app.use("/api/v1/search", searchRouter);
 app.use("/api/v1/lists", listRouter);
 app.use("/api/v1/credits", creditRouter);
 app.use("/api/v1/billing", billingRouter);
+app.use("/api/v1/bulk", bulkRouter);
 app.use("/api/v1/api-keys", apiKeyRouter);
 app.use("/api/v1/extension", extensionRouter);
 app.use("/api/v1/webhooks", webhookRouter);
 app.use("/api/v1/admin", adminRouter);
+app.use("/api/v1/analytics", analyticsRouter);
 app.use("/health", healthRouter);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
