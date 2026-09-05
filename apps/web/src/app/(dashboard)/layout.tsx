@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutDashboard, Search, Users, List, Zap, BarChart3,
-  Settings, CreditCard, Key, Bell, LogOut, ChevronDown, Menu,
+  Settings, CreditCard, Key, Bell, LogOut, ChevronDown, Menu, FileSpreadsheet
 } from "lucide-react";
 import { useState } from "react";
 
@@ -15,6 +15,7 @@ const navItems = [
   { icon: Users, label: "Contacts", href: "/dashboard/contacts" },
   { icon: List, label: "Lists", href: "/dashboard/lists" },
   { icon: Zap, label: "Enrichment", href: "/dashboard/enrichment" },
+  { icon: FileSpreadsheet, label: "Bulk Enrichment", href: "/dashboard/enrichment/bulk" },
   { icon: BarChart3, label: "Analytics", href: "/dashboard/analytics" },
 ];
 
