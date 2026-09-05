@@ -32,20 +32,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [credits, setCredits] = useState<number | null>(null);
 
   useEffect(() => {
-    // Guard: redirect to login if no token
     const token = localStorage.getItem("accessToken");
     if (!token) {
       router.push("/login");
+      return;
     }
-    // Fetch credits
-    if (token) {
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/credits`, {
-        headers: { Authorization: `Bearer ${token}` },
+    
+    // Fetch user profile for onboarding check
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.data?.onboardingCompleted === false) {
+          router.push("/onboarding");
+        }
       })
-        .then((r) => r.json())
-        .then((d) => setCredits(d?.data?.balance))
-        .catch(() => {});
-    }
+      .catch(() => {});
+
+    // Fetch credits
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/credits`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((d) => setCredits(d?.data?.balance))
+      .catch(() => {});
   }, [router]);
 
   const handleLogout = () => {

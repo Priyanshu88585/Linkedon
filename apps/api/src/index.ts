@@ -13,6 +13,7 @@ import { globalRateLimiter } from "./middleware/rate-limit.middleware";
 // Route imports
 import { authRouter } from "./routes/auth.routes";
 import { userRouter } from "./routes/user.routes";
+import { workspaceRouter } from "./routes/workspace.routes";
 import { contactRouter } from "./routes/contact.routes";
 import { enrichmentRouter } from "./routes/enrichment.routes";
 import { searchRouter } from "./routes/search.routes";
@@ -56,6 +57,7 @@ app.use(globalRateLimiter);
 // ─── Routes ──────────────────────────────────────────────────────────────────
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/users", userRouter);
+app.use("/api/v1/workspaces", workspaceRouter);
 app.use("/api/v1/contacts", contactRouter);
 app.use("/api/v1/enrichment", enrichmentRouter);
 app.use("/api/v1/search", searchRouter);
