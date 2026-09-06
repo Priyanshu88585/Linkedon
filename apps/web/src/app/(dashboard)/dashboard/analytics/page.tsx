@@ -6,12 +6,10 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
 } from "recharts";
-import { useAuth } from "@/context/auth.context";
 
 const COLORS = ['#7c3aed', '#10b981', '#f59e0b', '#ec4899'];
 
 export default function AnalyticsPage() {
-  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [overview, setOverview] = useState({ totalEnriched: 0, creditsSpent: 0, hitRate: 0 });
   const [trendData, setTrendData] = useState([]);
@@ -52,10 +50,8 @@ export default function AnalyticsPage() {
       }
     };
 
-    if (user) {
-      fetchAnalytics();
-    }
-  }, [user]);
+    fetchAnalytics();
+  }, []);
 
   if (loading) {
     return (

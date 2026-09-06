@@ -6,3 +6,4 @@ export * from "./billing.model";
 export * from "./api-key.model";
 export * from "./audit-notification.model";
 export * from "./misc.model";
+export * from "./bulk-job.model";

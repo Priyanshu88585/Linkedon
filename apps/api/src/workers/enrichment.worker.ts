@@ -4,9 +4,10 @@ import {
   ContactModel,
   CreditBalanceModel,
   CreditTransactionModel,
+  BulkJobModel,
 } from "@linkedon/database";
 import { EnrichmentStatus, CreditTransactionType, ContactVerificationStatus } from "@linkedon/types";
-import { MockProvider } from "../providers/mock.provider";
+import { providerManager } from "../services/provider-manager.service";
 import { config } from "../config";
 
 const connection = {
@@ -14,12 +15,12 @@ const connection = {
   port: parseInt(new URL(config.redisUrl).port ?? "6379", 10),
 };
 
-const mockProvider = new MockProvider();
+// No mockProvider instantiated globally, we use providerManager
 
 export const enrichmentWorker = new Worker(
   "enrichment",
   async (job) => {
-    const { enrichmentId, workspaceId, userId, input, inputType, saveContact } = job.data;
+    const { enrichmentId, workspaceId, userId, input, inputType, saveContact, bulkJobId } = job.data;
     const startTime = Date.now();
 
     // Mark as processing
@@ -28,9 +29,10 @@ export const enrichmentWorker = new Worker(
     });
 
     try {
-      // Use mock provider in dev, real providers in prod
-      const provider = mockProvider; // In Phase 4 we add ProviderManager here
-      const result = await provider.enrich(input);
+      // Use ProviderManager
+      // Since input could just be an object, we map it to EnrichmentParams
+      const params = typeof input === "string" ? { email: input } : input;
+      const result = await providerManager.enrichPerson(params);
 
       if (!result.success || !result.data) {
         await EnrichmentModel.findByIdAndUpdate(enrichmentId, {
@@ -38,6 +40,12 @@ export const enrichmentWorker = new Worker(
           durationMs: Date.now() - startTime,
           completedAt: new Date(),
         });
+        
+        if (bulkJobId) {
+          await BulkJobModel.findByIdAndUpdate(bulkJobId, {
+            $inc: { processedRows: 1 }
+          });
+        }
         return;
       }
 
@@ -120,6 +128,12 @@ export const enrichmentWorker = new Worker(
         completedAt: new Date(),
       });
 
+      if (bulkJobId) {
+        await BulkJobModel.findByIdAndUpdate(bulkJobId, {
+          $inc: { processedRows: 1, successfulRows: 1 }
+        });
+      }
+
       console.log(`✅ Enrichment ${enrichmentId} completed in ${Date.now() - startTime}ms`);
     } catch (err) {
       console.error(`❌ Enrichment ${enrichmentId} failed:`, err);
@@ -129,6 +143,13 @@ export const enrichmentWorker = new Worker(
         durationMs: Date.now() - startTime,
         completedAt: new Date(),
       });
+      
+      if (bulkJobId) {
+        await BulkJobModel.findByIdAndUpdate(bulkJobId, {
+          $inc: { processedRows: 1 }
+        });
+      }
+      
       throw err; // BullMQ will retry
     }
   },

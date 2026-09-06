@@ -70,6 +70,10 @@ export const config = {
     endpoint: process.env.S3_ENDPOINT,
   },
 
+  googleClientId: process.env.GOOGLE_CLIENT_ID || "",
+  githubClientId: process.env.GITHUB_CLIENT_ID || "",
+  githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "",
+
   // Rate limits
   rateLimits: {
     global: {

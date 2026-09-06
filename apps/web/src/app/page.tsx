@@ -8,6 +8,7 @@ import {
   Check, ChevronRight, Globe, Lock, Search, Database, ArrowRight,
   Star, Menu, X,
 } from "lucide-react";
+import { LogoIcon } from "../components/ui/logo-icon";
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 
@@ -17,11 +18,9 @@ function Navbar() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[#1c1c1c] bg-black/80 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
-            <Zap className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-lg font-bold tracking-tight">Linkedon</span>
+        <Link href="/" className="flex items-center gap-2.5 relative z-10 group">
+          <LogoIcon className="w-8 h-8" />
+          <span className="text-xl font-bold text-white tracking-tight">Linkedon</span>
         </Link>
 
         <div className="hidden md:flex items-center gap-1">
@@ -649,11 +648,9 @@ function Footer() {
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-12 mb-12">
           <div>
-            <Link href="/" className="flex items-center gap-2 mb-4">
-              <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center">
-                <Zap className="w-3.5 h-3.5 text-white" />
-              </div>
-              <span className="font-bold">Linkedon</span>
+            <Link href="/" className="flex items-center gap-2 mb-6">
+              <LogoIcon className="w-6 h-6" />
+              <span className="font-bold text-white tracking-tight">Linkedon</span>
             </Link>
             <p className="text-sm text-[#666] leading-relaxed">
               Professional contact enrichment from authorized sources.

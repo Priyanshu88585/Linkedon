@@ -4,7 +4,9 @@ import { UserRole, UserStatus } from "@linkedon/types";
 export interface UserDocument extends Document {
   name: string;
   email: string;
-  passwordHash: string;
+  passwordHash?: string;
+  googleId?: string;
+  githubId?: string;
   avatar?: string;
   role: UserRole;
   workspaceIds: mongoose.Types.ObjectId[];
@@ -40,8 +42,18 @@ const UserSchema = new Schema<UserDocument>(
     },
     passwordHash: {
       type: String,
-      required: true,
+      required: false,
       select: false, // never returned by default
+    },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    githubId: {
+      type: String,
+      unique: true,
+      sparse: true,
     },
     avatar: {
       type: String,

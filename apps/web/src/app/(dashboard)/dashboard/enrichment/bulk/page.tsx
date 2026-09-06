@@ -2,14 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { UploadCloud, CheckCircle2, AlertCircle, FileSpreadsheet, Loader2 } from "lucide-react";
-import { useAuth } from "@/context/auth.context";
 
 export default function BulkEnrichmentPage() {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "success" | "error">("idle");
   const [bulkJobId, setBulkJobId] = useState<string | null>(null);
-  const { user } = useAuth();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {

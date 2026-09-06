@@ -3,6 +3,7 @@ import { z } from "zod";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { OAuth2Client } from "google-auth-library";
 import { UserModel, WorkspaceModel, CreditBalanceModel, SubscriptionModel, PlanModel } from "@linkedon/database";
 import { UserRole, UserStatus, SubscriptionStatus, PlanName } from "@linkedon/types";
 import { config } from "../config";
@@ -185,6 +186,291 @@ authRouter.post("/login", authRateLimiter, async (req, res) => {
       tokens,
     },
   });
+});
+
+// ─── POST /auth/google ────────────────────────────────────────────────────────
+
+const client = new OAuth2Client(config.googleClientId);
+
+authRouter.post("/google", authRateLimiter, async (req, res) => {
+  const { credential, accessToken } = req.body;
+  if (!credential && !accessToken) throw HttpErrors.badRequest("Google credential or access token required");
+
+  try {
+    let payload: any;
+
+    if (accessToken) {
+      // Handle custom button flow (access token)
+      const userResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!userResponse.ok) {
+        throw HttpErrors.unauthorized("Invalid Google access token");
+      }
+      payload = await userResponse.json();
+    } else {
+      // Handle standard GoogleLogin component flow (ID token)
+      const ticket = await client.verifyIdToken({
+        idToken: credential,
+        audience: config.googleClientId,
+      });
+      payload = ticket.getPayload();
+    }
+
+    if (!payload || !payload.email) {
+      throw HttpErrors.badRequest("Invalid Google token payload");
+    }
+
+    const { email, name, sub: googleId, picture } = payload;
+    
+    // Check if user exists
+    let user = await UserModel.findOne({ email });
+
+    if (!user) {
+      // Create new user via Google
+      user = await UserModel.create({
+        name: name || "Google User",
+        email,
+        googleId,
+        avatar: picture,
+        status: UserStatus.ACTIVE,
+        emailVerified: true,
+      });
+
+      // Create default workspace for new Google user
+      let slug = slugify(name || "workspace");
+      const existingSlug = await WorkspaceModel.findOne({ slug });
+      if (existingSlug) slug = `${slug}-${Date.now()}`;
+
+      const freePlan = await PlanModel.findOne({ name: PlanName.FREE });
+      if (freePlan) {
+        const workspace = await WorkspaceModel.create({
+          name: `${name || "My"}'s Workspace`,
+          slug,
+          ownerId: user._id,
+          planId: freePlan._id,
+          settings: {
+            allowMemberInvites: true,
+            defaultCreditPolicy: "charge_on_success",
+            dataRetentionDays: 365,
+            timezone: "UTC",
+          },
+        });
+
+        await UserModel.findByIdAndUpdate(user._id, {
+          $push: { workspaceIds: workspace._id },
+          currentWorkspaceId: workspace._id,
+        });
+
+        await CreditBalanceModel.create({
+          workspaceId: workspace._id,
+          balance: freePlan.monthlyCredits,
+          lifetimeUsed: 0,
+        });
+
+        await SubscriptionModel.create({
+          workspaceId: workspace._id,
+          planId: freePlan._id,
+          stripeCustomerId: `cus_pending_${user._id}`,
+          status: SubscriptionStatus.ACTIVE,
+          interval: "monthly",
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          cancelAtPeriodEnd: false,
+        });
+        
+        user.currentWorkspaceId = workspace._id;
+      }
+    } else if (!user.googleId) {
+      // Merge account
+      user.googleId = googleId;
+      if (!user.avatar && picture) user.avatar = picture;
+      user.emailVerified = true;
+      user.status = UserStatus.ACTIVE;
+      await user.save();
+    }
+
+    // Update last login
+    await UserModel.findByIdAndUpdate(user._id, { lastLoginAt: new Date() });
+
+    const workspaceId = user.currentWorkspaceId?.toString();
+    const tokens = generateTokens(user._id.toString(), email, user.role, workspaceId);
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          role: user.role,
+          emailVerified: user.emailVerified,
+          onboardingCompleted: user.onboardingCompleted,
+          currentWorkspaceId: user.currentWorkspaceId,
+        },
+        tokens,
+      },
+    });
+  } catch (error) {
+    console.error("Google Auth Error:", error);
+    throw HttpErrors.unauthorized("Google authentication failed");
+  }
+});
+
+// ─── POST /auth/github ────────────────────────────────────────────────────────
+
+authRouter.post("/github", authRateLimiter, async (req, res) => {
+  const { code } = req.body;
+  if (!code) throw HttpErrors.badRequest("GitHub code required");
+
+  try {
+    // 1. Exchange code for access token
+    const tokenResponse = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        client_id: config.githubClientId,
+        client_secret: config.githubClientSecret,
+        code,
+      }),
+    });
+    
+    const tokenData = (await tokenResponse.json()) as any;
+    if (tokenData.error) {
+      throw HttpErrors.unauthorized(`GitHub token error: ${tokenData.error_description}`);
+    }
+
+    const accessToken = tokenData.access_token;
+    if (!accessToken) throw HttpErrors.unauthorized("GitHub did not return an access token");
+
+    // 2. Fetch user profile
+    const userResponse = await fetch("https://api.github.com/user", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+      },
+    });
+    const githubUser = (await userResponse.json()) as any;
+    
+    // 3. Fetch user emails (since primary email might be hidden)
+    const emailResponse = await fetch("https://api.github.com/user/emails", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+      },
+    });
+    const githubEmails = (await emailResponse.json()) as any[];
+    
+    const primaryEmailObj = githubEmails.find((e: any) => e.primary && e.verified) 
+                         || githubEmails.find((e: any) => e.verified)
+                         || githubEmails[0];
+                         
+    if (!primaryEmailObj || !primaryEmailObj.email) {
+      throw HttpErrors.badRequest("Could not retrieve a verified email from GitHub");
+    }
+
+    const email = primaryEmailObj.email.toLowerCase();
+    const name = githubUser.name || githubUser.login;
+    const githubId = githubUser.id.toString();
+    const avatar = githubUser.avatar_url;
+
+    // 4. Check if user exists
+    let user = await UserModel.findOne({ email });
+
+    if (!user) {
+      // Create new user via GitHub
+      user = await UserModel.create({
+        name,
+        email,
+        githubId,
+        avatar,
+        status: UserStatus.ACTIVE,
+        emailVerified: true,
+      });
+
+      // Create default workspace for new GitHub user
+      let slug = slugify(name || "workspace");
+      const existingSlug = await WorkspaceModel.findOne({ slug });
+      if (existingSlug) slug = `${slug}-${Date.now()}`;
+
+      const freePlan = await PlanModel.findOne({ name: PlanName.FREE });
+      if (freePlan) {
+        const workspace = await WorkspaceModel.create({
+          name: `${name || "My"}'s Workspace`,
+          slug,
+          ownerId: user._id,
+          planId: freePlan._id,
+          settings: {
+            allowMemberInvites: true,
+            defaultCreditPolicy: "charge_on_success",
+            dataRetentionDays: 365,
+            timezone: "UTC",
+          },
+        });
+
+        await UserModel.findByIdAndUpdate(user._id, {
+          $push: { workspaceIds: workspace._id },
+          currentWorkspaceId: workspace._id,
+        });
+
+        await CreditBalanceModel.create({
+          workspaceId: workspace._id,
+          balance: freePlan.monthlyCredits,
+          lifetimeUsed: 0,
+        });
+
+        await SubscriptionModel.create({
+          workspaceId: workspace._id,
+          planId: freePlan._id,
+          stripeCustomerId: `cus_pending_${user._id}`,
+          status: SubscriptionStatus.ACTIVE,
+          interval: "monthly",
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          cancelAtPeriodEnd: false,
+        });
+        
+        user.currentWorkspaceId = workspace._id;
+      }
+    } else if (!user.githubId) {
+      // Merge account
+      user.githubId = githubId;
+      if (!user.avatar && avatar) user.avatar = avatar;
+      user.emailVerified = true;
+      user.status = UserStatus.ACTIVE;
+      await user.save();
+    }
+
+    // Update last login
+    await UserModel.findByIdAndUpdate(user._id, { lastLoginAt: new Date() });
+
+    const workspaceId = user.currentWorkspaceId?.toString();
+    const tokens = generateTokens(user._id.toString(), email, user.role, workspaceId);
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          role: user.role,
+          emailVerified: user.emailVerified,
+          onboardingCompleted: user.onboardingCompleted,
+          currentWorkspaceId: user.currentWorkspaceId,
+        },
+        tokens,
+      },
+    });
+  } catch (error) {
+    console.error("GitHub Auth Error:", error);
+    throw HttpErrors.unauthorized("GitHub authentication failed");
+  }
 });
 
 // ─── POST /auth/refresh ───────────────────────────────────────────────────────

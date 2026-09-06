@@ -7,6 +7,7 @@ import {
   LayoutDashboard, Search, Users, List, Zap, BarChart3,
   Settings, CreditCard, Key, Bell, LogOut, ChevronDown, Menu, FileSpreadsheet
 } from "lucide-react";
+import { LogoIcon } from "../../components/ui/logo-icon";
 import { useState } from "react";
 
 const navItems = [
@@ -76,9 +77,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         {/* Logo */}
         <div className="h-[60px] flex items-center px-4 border-b border-[#1c1c1c] gap-3">
-          <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center shrink-0">
-            <Zap className="w-4 h-4 text-white" />
-          </div>
+          <LogoIcon className="w-8 h-8" />
           {sidebarOpen && <span className="font-bold text-lg">Linkedon</span>}
         </div>
 
